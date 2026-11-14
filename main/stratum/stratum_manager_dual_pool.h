@@ -2,6 +2,19 @@
 
 #include "stratum_manager.h"
 #include "utils.h"
+#include "../costean/pool_split.h"
+
+// Costean OS: per-pool view for the LCD / API
+struct CosteanPoolView {
+    bool configured;
+    bool healthy;
+    int weight;        // configured split %
+    int effective;     // after failover %
+    float jobShare;    // fraction of jobs actually sent
+    float creditedGhs; // from accepted share difficulty
+    uint64_t accepted;
+    uint64_t rejected;
+};
 
 class StratumManagerDualPool : public StratumManager {
     friend StratumTaskBase; ///< Allows StratumTaskBase to access private members
@@ -9,6 +22,7 @@ class StratumManagerDualPool : public StratumManager {
   protected:
     int m_balance = 50;
     int32_t m_error_accum = 0;
+    costean::PoolSplit m_split;   // Costean OS multi-pool split + failover
 
     uint64_t m_accepted[2]{};
     uint64_t m_rejected[2]{};
@@ -33,10 +47,7 @@ class StratumManagerDualPool : public StratumManager {
         }
     }
 
-    virtual void acceptedShare(int pool)
-    {
-        m_accepted[pool]++;
-    }
+    virtual void acceptedShare(int pool);
 
     virtual void rejectedShare(int pool)
     {
@@ -66,6 +77,10 @@ class StratumManagerDualPool : public StratumManager {
     virtual int getNextActivePool();
 
     bool isDualPool() const override { return true; }
+
+    // Costean OS: snapshot of the split for the LCD and /api/costean (n <= 2)
+    void getSplitView(CosteanPoolView *v, int n);
+    bool isFailoverActive();
 
     virtual void checkForBestDiff(int pool, double diff, uint32_t nbits);
 
@@ -102,6 +117,7 @@ class StratumManagerDualPool : public StratumManager {
         m_accepted[pool] = 0;
         m_rejected[pool] = 0;
         m_bestSessionDiff[pool] = 0;
+        m_split.resetStats(pool);
         suffixString(std::max(m_bestSessionDiff[0], m_bestSessionDiff[1]), m_bestSessionDiffString, DIFF_STRING_SIZE, 0);
         if (m_stratumTasks[pool]) m_stratumTasks[pool]->m_poolErrors = 0;
     }

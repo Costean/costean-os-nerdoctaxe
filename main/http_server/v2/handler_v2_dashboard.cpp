@@ -87,7 +87,8 @@ esp_err_t GET_V2_dashboard(httpd_req_t *req)
         perf["bestSessionDiff"] = STRATUM_MANAGER->getBestSessionDiff();
         perf["sharesAccepted"]  = STRATUM_MANAGER->getSharesAccepted();
         perf["sharesRejected"]  = STRATUM_MANAGER->getSharesRejected();
-        perf["frequency"]       = board->getAsicFrequency();
+        perf["frequency"]       = board->getEffectiveAsicFrequency();
+        perf["coreVoltageSet"]  = board->getEffectiveAsicVoltageMillis();
         perf["asicCount"]       = board->getAsicCount();
         perf["smallCoreCount"]  = board->getAsics() ? board->getAsics()->getSmallCoreCount() : 0;
 

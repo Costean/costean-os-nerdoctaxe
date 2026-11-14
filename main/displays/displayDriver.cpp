@@ -24,6 +24,7 @@
 
 #include "nvs_config.h"
 #include "displayDriver.h"
+#include "../costean/costean_core.h"
 
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
@@ -291,6 +292,10 @@ void DisplayDriver::safe_screen_change(lv_obj_t * new_scr, lv_scr_load_anim_t an
 {
     m_screenAnimationRunning = true;
     _ui_screen_change(new_scr, anim_type, speed, delay);
+    // Costean OS: if no animation ended up pending (target already shown, immediate load or NULL
+    // target), no SCREEN_LOADED will arrive later, so don't leave the buttons locked.
+    lv_disp_t *d = lv_disp_get_default();
+    if (!d || !d->scr_to_load) m_screenAnimationRunning = false;
 
 }
 
@@ -637,10 +642,20 @@ void DisplayDriver::handleUiQueueMessages(ui_msg_t &msg, int64_t tnow)
 
 void DisplayDriver::handleAutoOffAndOverlays()
 {
+    // Costean OS: a schedule window can switch the backlight off; any button press wakes the
+    // screen for 30 s. Overlays (block found, faults) always turn it on.
+    static bool s_schedOff = false;
     if (m_isActiveOverlay || m_foundBlockOverlay) {
         displayTurnOn();
+    } else if (costean_lcd_mode() == 2) {
+        s_schedOff = true;
+        if ((esp_timer_get_time() - m_lastKeypressTime) > 30000000) displayTurnOff(); else displayTurnOn();
     } else if (m_isAutoScreenOffEnabled) {
+        s_schedOff = false;
         checkAutoTurnOffScreen();
+    } else if (s_schedOff) {
+        s_schedOff = false;
+        displayTurnOn();
     }
 }
 

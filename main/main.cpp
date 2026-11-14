@@ -34,6 +34,8 @@
 #include "macros.h"
 #include "main.h"
 #include "nvs_config.h"
+#include "safe_boot.h"
+#include "costean/costean_core.h"
 #include "otp/otp.h"
 #include "ping_task.h"
 #include "serial.h"
@@ -298,6 +300,27 @@ extern "C" void app_main(void)
     // on-board W5500 (Q1370/Q1373) or HAT detected in the constructor (NerdAxeGaia)
     initEthernet(board);
 
+#ifdef NERDOCTAXEGAMMA
+    // Costean OS: one-time safe start. Runs once per install of this version, then never again.
+    {
+        bool done = Config::cfgHasKey(SAFE_BOOT_NVS_KEY);
+        bool hasF = Config::cfgHasKey(NVS_CONFIG_ASIC_FREQ);
+        bool hasV = Config::cfgHasKey(NVS_CONFIG_ASIC_VOLTAGE);
+        SafeBootResult sb = safeBootDecide(done, hasF, Config::getAsicFrequency(0), hasV, Config::getAsicVoltage(0));
+        if (!done) {
+            if (sb.setFreq) Config::setAsicFrequency(sb.freq);
+            if (sb.setVolt) Config::setAsicVoltage(sb.volt);
+            Config::cfgSetU16(SAFE_BOOT_NVS_KEY, 1);
+            Config::flush();
+            if (sb.setFreq || sb.setVolt) {
+                ESP_LOGW("safe_boot", "Safe start: tuning set to %d MHz / %d mV", SAFE_BOOT_FREQ_MHZ, SAFE_BOOT_VOLT_MV);
+            } else {
+                ESP_LOGI("safe_boot", "Safe start: saved tuning already at or below %d MHz / %d mV, unchanged", SAFE_BOOT_FREQ_MHZ, SAFE_BOOT_VOLT_MV);
+            }
+        }
+    }
+#endif
+
     board->loadSettings();
     board->initBoard();
 
@@ -426,6 +449,8 @@ extern "C" void app_main(void)
             // OTA writes SPI flash which disables cache — must NOT run on PSRAM stack
             xTaskCreate(FACTORY_OTA_UPDATER.taskWrapper, "ota updater", 8192, (void *) &FACTORY_OTA_UPDATER, 1, NULL);
             xTaskCreatePSRAM(StratumManager::taskWrapper, "stratum manager", 8192, (void *) STRATUM_MANAGER, 5, NULL);
+            // Costean OS: profiles, safety governor, auto-tune (off by default), schedules, long history
+            costean_init();
 
             if (board->hasHashrateCounter()) {
                 HASHRATE_MONITOR.start(board, board->getAsics());

@@ -44,8 +44,43 @@ void _ui_slider_set_property(lv_obj_t * target, int id, int val)
 }
 
 
+// Costean OS: LVGL 8.3.11 lv_scr_load_anim() dereferences NULL when it is called while another
+// screen-load animation is still running (scr_load_internal() clears scr_to_load, then
+// lv_obj_set_pos(d->scr_to_load, ...)). DisplayDriver can do that from queued messages
+// (e.g. shutdown -> PowerOff during a page swipe), so finish any pending load first.
+static void costean_finish_pending_scr_load(void)
+{
+    lv_disp_t * d = lv_disp_get_default();
+    if(!d || !d->scr_to_load) return;
+    lv_obj_t * pending = d->scr_to_load;
+    lv_anim_del(pending, NULL);
+    if(d->act_scr && d->act_scr != pending) lv_anim_del(d->act_scr, NULL);
+    if(d->prev_scr && d->prev_scr != pending) {
+        lv_anim_del(d->prev_scr, NULL);
+        lv_obj_set_pos(d->prev_scr, 0, 0);
+        lv_obj_remove_local_style_prop(d->prev_scr, LV_STYLE_OPA, 0);
+    }
+    if(d->act_scr && d->act_scr != pending) {
+        lv_obj_set_pos(d->act_scr, 0, 0);
+        lv_obj_remove_local_style_prop(d->act_scr, LV_STYLE_OPA, 0);
+    }
+    lv_obj_set_pos(pending, 0, 0);
+    lv_obj_remove_local_style_prop(pending, LV_STYLE_OPA, 0);
+    d->prev_scr = NULL;
+    d->draw_prev_over_act = false;
+    d->scr_to_load = NULL;
+    if(d->act_scr != pending) {
+        lv_scr_load_anim(pending, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);   // immediate, sends SCREEN_LOADED
+    } else {
+        lv_event_send(pending, LV_EVENT_SCREEN_LOADED, NULL);             // anim had started already
+        lv_obj_invalidate(pending);
+    }
+}
+
 void _ui_screen_change(lv_obj_t * target, lv_scr_load_anim_t fademode, int spd, int delay)
 {
+    if(!target) return;
+    costean_finish_pending_scr_load();
     lv_scr_load_anim(target, fademode, spd, delay, false);
 }
 

@@ -1,0 +1,21 @@
+{
+  "name": "costean-ui",
+  "private": true,
+  "version": "1.2.0-costean.1",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "description": "Costean OS web UI (NerdOctAxe Gamma) for shufps ESP-Miner-NerdQAxePlus v1.1.2 (GPL-3.0)",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/version.mjs && vite build && node scripts/gzip-dist.mjs",
+    "test": "vitest run",
+    "mock": "node e2e/mock-server.mjs",
+    "e2e": "node e2e/shots.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "svelte": "^5.57.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}

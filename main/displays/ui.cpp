@@ -821,6 +821,10 @@ void UI::createQRScreen(uint8_t *buf, int size) {
 
 void UI::powerOffScreenInit(void)
 {
+#if NERDOCTAXE_LCD_UI3
+    octaPowerOff();
+    return;
+#endif
     // Create a new blank screen
     ui_PowerOffScreen = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_PowerOffScreen, LV_OBJ_FLAG_SCROLLABLE);
@@ -846,6 +850,10 @@ void UI::destroyQRScreen() {
 // Function to show the overlay with an error message and custom colors
 void UI::showErrorOverlay(const char *error_message, uint32_t error_code)
 {
+#if NERDOCTAXE_LCD_UI3
+    octaShowError(error_message, error_code);
+    return;
+#endif
     // Get the currently active screen
     lv_obj_t *current_screen = lv_scr_act();
 
@@ -906,6 +914,9 @@ void UI::hideErrorOverlay()
 // Function to show the overlay with a centered image
 void UI::showImageOverlay(const lv_img_dsc_t *image)
 {
+#if NERDOCTAXE_LCD_UI3
+    if (image == &ui_img_found_block_png) { octaShowBlock(); return; }
+#endif
     // Get the currently active screen
     lv_obj_t *current_screen = lv_scr_act();
 
@@ -929,6 +940,9 @@ void UI::showImageOverlay(const lv_img_dsc_t *image)
 
 void UI::hideImageOverlay()
 {
+#if NERDOCTAXE_LCD_UI3
+    octaHideBlock();
+#endif
     if (ui_imageOverlayContainer != NULL) {
         lv_obj_del(ui_imageOverlayContainer);
         ui_imageOverlayContainer = NULL;
@@ -941,6 +955,10 @@ void UI::init(Board* board, DisplayDriver *display)
     m_theme = board->getTheme();
     m_display = display;
 
+#if NERDOCTAXE_LCD_UI3
+    octaInit();
+    return;
+#endif
     lv_disp_t *dispp = lv_disp_get_default();
     lv_theme_t *m_theme =
         lv_theme_default_init(dispp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED), false, LV_FONT_DEFAULT);

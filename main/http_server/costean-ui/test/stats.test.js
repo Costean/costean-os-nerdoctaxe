@@ -1,0 +1,11 @@
+import { test, expect } from 'vitest';
+import { expectSecs, probWithin, fmtOdds, ladder, describe, shareLuck, netDiff } from '../src/lib/stats.js';
+import { bucket, labKey } from '../src/lib/trend.js';
+test('expected time to block', () => { const s = expectSecs(1.27e14, 9600); expect(s / 31557600).toBeGreaterThan(1700); expect(s / 31557600).toBeLessThan(1900); });
+test('prob within', () => { expect(probWithin(1000, 9600, 1e9)).toBeCloseTo(1); expect(probWithin(0, 1, 1)).toBe(0); });
+test('odds format', () => { expect(fmtOdds(0.5)).toBe('50.00%'); expect(fmtOdds(1e-4)).toBe('1 in 10,000'); });
+test('ladder', () => { expect(ladder(1e7, 1e14)).toBeCloseTo(0.5); expect(ladder(0, 1e14)).toBe(0); });
+test('describe', () => { const d = describe([1, 2, 3, 4]); expect(d.mean).toBe(2.5); expect(d.min).toBe(1); });
+test('share luck', () => { const e = expectSecs(1000, 1000); const r = shareLuck(0, 10, e * 10, 1000, 1000); expect(r.luck).toBeCloseTo(1); });
+test('netDiff', () => { expect(netDiff({ stratum: { pools: [{ networkDifficulty: 5 }] } })).toBe(5); expect(netDiff({})).toBe(0); });
+test('bucket + labKey', () => { const b = bucket([{ t: 60000, gh: 1, chr: [1, 3] }, { t: 61000, gh: 3, chr: [3, 5] }]); expect(b.gh).toBe(2); expect(b.chr).toEqual([2, 4]); expect(labKey(500, 1.1013)).toBe('500|1100'); });

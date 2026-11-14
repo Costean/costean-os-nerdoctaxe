@@ -34,6 +34,12 @@ SRCS
     "boards/drivers/tmp451_mux_exp.cpp"
     "boards/drivers/fxl6408.cpp"
     "history.cpp"
+    "costean/costean_core.cpp"
+    "costean/pool_split.cpp"
+    "costean/scheduler.cpp"
+    "costean/tuning.cpp"
+    "costean/rollup.cpp"
+    "./http_server/handler_costean.cpp"
     "discord.cpp"
     "fan_controller.cpp"
     "./pid/PID_v1_bc.cpp"
@@ -87,6 +93,8 @@ SRCS
     "./tasks/can_master_task.cpp"
     "./displays/displayDriver.cpp"
     "./displays/ui.cpp"
+    "./displays/ui_octa.cpp"
+    "./displays/octa_data_fw.cpp"
     "./displays/ui_ipc.cpp"
     "./displays/button.cpp"
     "./displays/ui_helpers.cpp"
@@ -157,7 +165,7 @@ REQUIRES
 )
 
 
-set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/axe-os")
+set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/costean-ui")
 
 option(BUILD_WEB "Enable web UI build" ON)
 

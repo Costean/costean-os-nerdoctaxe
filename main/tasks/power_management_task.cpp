@@ -15,6 +15,7 @@
 #include "influx_task.h"
 #include "nvs_config.h"
 #include "serial.h"
+#include "costean/costean_core.h"
 
 #define POLL_RATE 2000
 
@@ -36,6 +37,8 @@ void PowerManagementTask::taskWrapper(void *pvParameters)
 void PowerManagementTask::restart()
 {
     ESP_LOGW(TAG, "Shutdown requested ...");
+    // Costean OS: keep the long history across the restart (saved by the Costean task)
+    costean_before_restart();
     // stops the main task
     lock();
 
@@ -69,7 +72,7 @@ void PowerManagementTask::checkCoreVoltageChanged()
 {
     static uint16_t last_core_voltage = 0;
 
-    uint16_t core_voltage = m_board->getAsicVoltageMillis();
+    uint16_t core_voltage = m_board->getEffectiveAsicVoltageMillis();
 
     if (core_voltage != last_core_voltage) {
         ESP_LOGI(TAG, "setting new vcore voltage to %umV", core_voltage);
@@ -82,7 +85,7 @@ void PowerManagementTask::checkAsicFrequencyChanged()
 {
     static uint16_t last_asic_frequency = 0;
 
-    uint16_t asic_frequency = m_board->getAsicFrequency();
+    uint16_t asic_frequency = m_board->getEffectiveAsicFrequency();
 
     if (asic_frequency != last_asic_frequency) {
         ESP_LOGI(TAG, "setting new asic frequency to %uMHz", asic_frequency);

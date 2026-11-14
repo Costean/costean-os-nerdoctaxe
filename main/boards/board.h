@@ -70,6 +70,8 @@ public:
     // asic settings
     int m_asicJobIntervalMs;
     int m_asicFrequency;
+    int m_overrideFreq = 0;
+    int m_overrideMv = 0;
     int m_asicVoltageMillis;
     int m_absMaxAsicFrequency;
     int m_absMinAsicVoltageMillis;
@@ -224,6 +226,22 @@ public:
     int getAsicVoltageMillis()
     {
         return m_asicVoltageMillis;
+    }
+
+    // Costean OS governor: run-time operating point (0 = use the saved values).
+    // Never written to NVS, so throttling or a schedule never changes the user's saved tuning.
+    void setOperatingOverride(int mhz, int mv)
+    {
+        m_overrideFreq = mhz;
+        m_overrideMv = mv;
+    }
+    int getEffectiveAsicFrequency()
+    {
+        return m_overrideFreq > 0 ? m_overrideFreq : m_asicFrequency;
+    }
+    int getEffectiveAsicVoltageMillis()
+    {
+        return m_overrideMv > 0 ? m_overrideMv : m_asicVoltageMillis;
     }
 
     int getAsicFrequency()

@@ -3,6 +3,7 @@
 #include "lvgl.h"
 #include "../boards/board.h"
 #include "../otp/qrcodegen.h"
+#include "ui_select.h"
 
 
 LV_IMG_DECLARE(ui_img_overheat_png);      // overheating screen
@@ -126,6 +127,13 @@ public:
     void bTCScreenInit(void);
     void globalStatsScreenInit(void);
     void powerOffScreenInit(void);
+
+    // NerdOctAxe Octa-core LCD UI (ui_octa.cpp)
+    void octaInit();
+    void octaPowerOff();
+    void octaShowError(const char *msg, uint32_t code);
+    void octaShowBlock();
+    void octaHideBlock();
 
     void showErrorOverlay(const char *error_message, uint32_t error_code);
     void hideErrorOverlay();

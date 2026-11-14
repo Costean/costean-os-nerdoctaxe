@@ -1,4 +1,5 @@
 
+#include "handler_costean.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -238,6 +239,14 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_uri_t v2_identify_options = {
         .uri = "/api/v2/identify", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
     httpd_register_uri_handler(http_server, &v2_identify_options);
+
+    // Costean OS API
+    httpd_uri_t costean_get = {.uri = "/api/costean*", .method = HTTP_GET, .handler = GET_costean, .user_ctx = rest_context};
+    httpd_register_uri_handler(http_server, &costean_get);
+    httpd_uri_t costean_patch = {.uri = "/api/costean", .method = HTTP_PATCH, .handler = PATCH_costean, .user_ctx = rest_context};
+    httpd_register_uri_handler(http_server, &costean_patch);
+    httpd_uri_t costean_options = {.uri = "/api/costean*", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
+    httpd_register_uri_handler(http_server, &costean_options);
 
     httpd_uri_t v2_system_get = {
         .uri = "/api/v2/system", .method = HTTP_GET, .handler = GET_V2_system, .user_ctx = rest_context};

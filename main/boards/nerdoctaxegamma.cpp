@@ -65,15 +65,16 @@ NerdOctaxeGamma::NerdOctaxeGamma()
         m_tps = new TPS53667();
 
         // Extended frequency range for TPS53667 (6 phases, higher power capacity)
-        m_asicFrequencies = {525, 550, 575, 600, 625, 650, 675, 700, 725, 750, 775, 800};
+        m_asicFrequencies = {500, 525, 550, 575, 600, 625, 650, 675, 700, 725, 750, 775, 800};
         m_absMaxAsicFrequency = 850; // Absolute max for manual input (danger zone)
 
         // Extended voltage range for TPS53667 (6 phases, higher current capacity)
-        m_asicVoltages = {1120, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1200, 1210, 1220, 1230, 1240, 1250, 1260};
+        m_asicVoltages = {1100, 1120, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1200, 1210, 1220, 1230, 1240, 1250, 1260};
 
         // Set higher default values for 6-phase configuration
+        // Costean OS start defaults: 700 MHz / 1150 mV (upstream: 700 MHz / 1210 mV)
         m_defaultAsicFrequency = m_asicFrequency = 700;
-        m_defaultAsicVoltageMillis = m_asicVoltageMillis = 1210; // 1.21V
+        m_defaultAsicVoltageMillis = m_asicVoltageMillis = 1150; // 1.15V
 
         ESP_LOGI(TAG, "TPS53667 voltage regulator detected (GPIO3=HIGH, 6 phases, 240A max with 24.9kΩ resistor)");
     } else {
@@ -87,6 +88,11 @@ NerdOctaxeGamma::NerdOctaxeGamma()
         m_minCurrentA = 0.0f;
         m_maxCurrentA = 20.0f;
         // m_asicFrequencies and m_absMaxAsicFrequency inherited from parent (500-600 MHz, max 800)
+
+        // Costean OS: the 4-phase regulator keeps the upstream start of 600 MHz / 1150 mV
+        // (its frequency list stops at 600 MHz); still within the 700/1150 safe-start cap.
+        m_defaultAsicFrequency = m_asicFrequency = 600;
+        m_defaultAsicVoltageMillis = m_asicVoltageMillis = 1150; // 1.15V
 
         ESP_LOGI(TAG, "TPS53647 voltage regulator detected (GPIO3=LOW, 4 phases, using inherited)");
     }

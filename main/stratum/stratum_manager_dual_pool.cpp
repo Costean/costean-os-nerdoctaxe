@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "global_state.h"
 #include "create_jobs_task.h"
 #include "macros.h"
@@ -51,38 +52,54 @@ void StratumManagerDualPool::disconnectedCallback(int index)
     m_stratumTasks[index]->startReconnectTimer();
 }
 
+// Costean OS: the split itself lives in costean::PoolSplit (smooth weighted round robin
+// per ASIC job, failover hands a dead pool's share to the healthy ones, 30 s rejoin delay).
+static uint64_t nowMs() { return (uint64_t) (esp_timer_get_time() / 1000); }
+
 int StratumManagerDualPool::getNextActivePool()
 {
     PThreadGuard lock(m_mutex);
-    int secondary_pct = 100 - m_balance;
-
-    bool valid0 = m_stratumTasks[0] && m_stratumTasks[0]->m_validNotify && !isVerifyBlocked(0);
-    bool valid1 = m_stratumTasks[1] && m_stratumTasks[1]->m_validNotify && !isVerifyBlocked(1);
-
-    // fast paths: only one pool has valid work
-    if (valid0 && !valid1) {
-        m_error_accum = 0; // reset drift so wir nicht "Schuld" ansammeln
-        return PRIMARY;
+    costean::PoolHealth h[2];
+    for (int i = 0; i < 2; i++) {
+        h[i].configured = m_stratumConfig[i] && m_stratumConfig[i]->getHost() && m_stratumConfig[i]->getHost()[0];
+        h[i].hasWork = m_stratumTasks[i] && m_stratumTasks[i]->m_validNotify;
+        h[i].blocked = isVerifyBlocked(i);
     }
-    if (!valid0 && valid1) {
-        m_error_accum = 0;
-        return SECONDARY;
+    if (m_split.update(h, nowMs())) {
+        ESP_LOGI(m_tag, "pool split now %d%% / %d%%%s", m_split.effective(0), m_split.effective(1),
+                 m_split.failoverActive() ? " (failover)" : "");
     }
-    if (!valid0 && !valid1) {
-        // nobody valid -> doesn't matter, but don't explode error
-        m_error_accum = 0;
-        return PRIMARY;
-    }
+    int p = m_split.next();
+    return p < 0 ? PRIMARY : p;   // nobody has work: same as stock (job is skipped as invalid)
+}
 
-    // dithering logic
-    m_error_accum += secondary_pct; // accumulate pressure for SECONDARY
+void StratumManagerDualPool::acceptedShare(int pool)
+{
+    if (pool < 0 || pool >= 2) return;
+    m_accepted[pool]++;
+    m_split.onAccepted(pool, (double) m_poolDifficulty[pool], nowMs());
+}
 
-    if (m_error_accum >= 100) {
-        // time to give SECONDARY a turn
-        m_error_accum -= 100;
-        return SECONDARY;
+void StratumManagerDualPool::getSplitView(CosteanPoolView *v, int n)
+{
+    PThreadGuard lock(m_mutex);
+    uint64_t t = nowMs();
+    for (int i = 0; i < n && i < 2; i++) {
+        v[i].configured = m_stratumConfig[i] && m_stratumConfig[i]->getHost() && m_stratumConfig[i]->getHost()[0];
+        v[i].healthy = m_split.healthy(i);
+        v[i].weight = m_split.weight(i);
+        v[i].effective = m_split.effective(i);
+        v[i].jobShare = m_split.jobShare(i);
+        v[i].creditedGhs = (float) m_split.creditedGhs(i, t);
+        v[i].accepted = m_accepted[i];
+        v[i].rejected = m_rejected[i];
     }
-    return PRIMARY;
+}
+
+bool StratumManagerDualPool::isFailoverActive()
+{
+    PThreadGuard lock(m_mutex);
+    return m_split.failoverActive();
 }
 
 const char *StratumManagerDualPool::getPoolHost(int pool)
@@ -145,26 +162,18 @@ bool StratumManagerDualPool::acceptsNotifyFrom(int pool)
 
 int StratumManagerDualPool::getActivePoolBalance(int pool)
 {
-    if (!m_stratumTasks[0] || !m_stratumTasks[1]) {
-        return 0;
-    }
-
-    if (!isConnected(0) && !isConnected(1)) {
-        return 0;
-    }
-
-    if (isConnected(0) && isConnected(1)) {
-        return pool == 0 ? m_balance : 100 - m_balance;
-    }
-
-    return isConnected(pool) ? 100 : 0;
-
+    PThreadGuard lock(m_mutex);
+    return m_split.effective(pool);
 }
 
 float StratumManagerDualPool::getActivePoolHashrate(int pool)
 {
-    int balance = getActivePoolBalance(pool);
-    return SYSTEM_MODULE.getCurrentHashrate() * (float) balance / 100.0f;
+    float share;
+    {
+        PThreadGuard lock(m_mutex);
+        share = m_split.jobShare(pool);
+    }
+    return SYSTEM_MODULE.getCurrentHashrate() * share;
 }
 
 void StratumManagerDualPool::loadSettings()
@@ -178,6 +187,11 @@ void StratumManagerDualPool::loadSettings()
         m_balance = newBalance;
         m_error_accum = 0;
         reconnect = true;
+    }
+    if (m_balance > 100) m_balance = 100;
+    {
+        uint8_t w[2] = {(uint8_t) m_balance, (uint8_t) (100 - m_balance)};
+        m_split.setWeights(w, 2);
     }
 
     StratumManager::loadSettings(reconnect);
@@ -215,6 +229,7 @@ void StratumManagerDualPool::getManagerInfoJson(JsonObject &obj, bool verbose)
 
     StratumManager::getManagerInfoJson(obj, verbose);
 
+    obj["splitFailover"] = m_split.failoverActive();
     JsonArray arr = obj["pools"].to<JsonArray>();
 
     for (int i = 0; i < 2; i++) {
@@ -229,6 +244,13 @@ void StratumManagerDualPool::getManagerInfoJson(JsonObject &obj, bool verbose)
         pool["pingRtt"]  = m_pingTasks[i] ? m_pingTasks[i]->get_last_ping_rtt() : 0;
         pool["pingLoss"] = m_pingTasks[i] ? m_pingTasks[i]->get_recent_ping_loss() : 0;
         pool["bestDiff"] = m_bestSessionDiff[i];
+        // Costean OS split
+        pool["splitWeight"] = m_split.weight(i);
+        pool["splitEffective"] = m_split.effective(i);
+        pool["splitHealthy"] = m_split.healthy(i);
+        pool["jobShare"] = m_split.jobShare(i);
+        pool["creditedHashrate"] = m_split.creditedGhs(i, nowMs());
+        pool["assignedHashrate"] = SYSTEM_MODULE.getCurrentHashrate() * m_split.jobShare(i);
 
         // dashboard-only fields — kept out of the legacy v1 /info so its
         // response stays small and shape-compatible with external clients
